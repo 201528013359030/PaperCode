@@ -1,0 +1,4 @@
+url:https://github.com/pathak22/context-encoder
+
+DATA_ROOT=dataset/train display_id=11 name=inpaintCenter overlapPred=4 wtl2=0.999 nBottleneck=4000 niter=1000 loadSize=350 fineSize=128 gpu=0 th train.lua
+
