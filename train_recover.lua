@@ -142,9 +142,12 @@ netG:add(SpatialBatchNormalization(ngf * 2)):add(nn.ReLU(true))
 netG:add(SpatialFullConvolution(ngf * 2, ngf, 4, 4, 2, 2, 1, 1))
 netG:add(SpatialBatchNormalization(ngf)):add(nn.ReLU(true))
 -- state size: (ngf) x 32 x 32
+netG:add(SpatialFullConvolution(ngf, ngf, 4, 4, 2, 2, 1, 1))
+netG:add(nn.ReLU(true))
+-- state size: (ngf) x 64 x 64 fyq
 netG:add(SpatialFullConvolution(ngf, nc, 4, 4, 2, 2, 1, 1))
 netG:add(nn.Tanh())
--- state size: (nc) x 64 x 64
+-- state size: (nc) x 128 x 128
 
 netG:apply(weights_init)
 
@@ -159,8 +162,8 @@ if opt.conditionAdv then
     -- state size: (ndf) x 64 x 64
 
     local netD_pred = nn.Sequential()
-    -- input pred: (nc) x 64 x 64, going into a convolution
-    netD_pred:add(SpatialConvolution(nc, ndf, 5, 5, 2, 2, 2+32, 2+32))      -- 32: to keep scaling of features same as context
+    -- input pred: (nc) x128  x 128, going into a convolution fyq
+    netD_pred:add(SpatialConvolution(nc, ndf, 5, 5, 2, 2, 2, 2))      -- 32: to keep scaling of features same as context
     -- state size: (ndf) x 64 x 64
 
     local netD_pl = nn.ParallelTable();
@@ -176,8 +179,10 @@ if opt.conditionAdv then
     netD:add(SpatialBatchNormalization(ndf)):add(nn.LeakyReLU(0.2, true))
     -- state size: (ndf) x 32 x 32
 else
-    -- input is (nc) x 64 x 64, going into a convolution
-    netD:add(SpatialConvolution(nc, ndf, 4, 4, 2, 2, 1, 1))
+    -- input is (nc) x 128 x 128, going into a convolution -fyq
+    netD:add(SpatialConvolution(nc, ndf, 5, 5, 2, 2, 2, 2))
+    -- state size: (ndf) x 64 x 64
+    netD:add(SpatialConvolution(ndf, ndf, 4, 4, 2, 2, 1, 1))
     netD:add(nn.LeakyReLU(0.2, true))
     -- state size: (ndf) x 32 x 32
 end
@@ -225,10 +230,10 @@ optimStateD = {
 ---------------------------------------------------------------------------
 local input_ctx_vis = torch.Tensor(opt.batchSize, nc, opt.fineSize, opt.fineSize)
 local input_ctx = torch.Tensor(opt.batchSize, nc, opt.fineSize, opt.fineSize)
-local input_center = torch.Tensor(opt.batchSize, nc, opt.fineSize/2, opt.fineSize/2)
+local input_center = torch.Tensor(opt.batchSize, nc, opt.fineSize, opt.fineSize) --fyq
 local input_real_center
 if opt.wtl2~=0 then
-    input_real_center = torch.Tensor(opt.batchSize, nc, opt.fineSize/2, opt.fineSize/2)
+    input_real_center = torch.Tensor(opt.batchSize, nc, opt.fineSize, opt.fineSize) --fyq
 end
 local noise = torch.Tensor(opt.batchSize, nz, 1, 1)
 local label = torch.Tensor(opt.batchSize)
@@ -279,7 +284,7 @@ local fDx = function(x)
    -- train with real
    data_tm:reset(); data_tm:resume()
    local real_ctx = data:getBatch()
-   local real_center = real_ctx[{{},{},{1 + opt.fineSize/4, opt.fineSize/2 + opt.fineSize/4},{1 + opt.fineSize/4, opt.fineSize/2 + opt.fineSize/4}}]:clone() -- copy by value
+   local real_center = real_ctx:clone() -- copy by value
    real_ctx[{{},{1},{1 + opt.fineSize/4 + opt.overlapPred, opt.fineSize/2 + opt.fineSize/4 - opt.overlapPred},{1 + opt.fineSize/4 + opt.overlapPred, opt.fineSize/2 + opt.fineSize/4 - opt.overlapPred}}] = 2*117.0/255.0 - 1.0
    real_ctx[{{},{2},{1 + opt.fineSize/4 + opt.overlapPred, opt.fineSize/2 + opt.fineSize/4 - opt.overlapPred},{1 + opt.fineSize/4 + opt.overlapPred, opt.fineSize/2 + opt.fineSize/4 - opt.overlapPred}}] = 2*104.0/255.0 - 1.0
    real_ctx[{{},{3},{1 + opt.fineSize/4 + opt.overlapPred, opt.fineSize/2 + opt.fineSize/4 - opt.overlapPred},{1 + opt.fineSize/4 + opt.overlapPred, opt.fineSize/2 + opt.fineSize/4 - opt.overlapPred}}] = 2*123.0/255.0 - 1.0
@@ -417,7 +422,7 @@ for epoch = 1, opt.niter do
       counter = counter + 1
       if counter % opt.display_iter == 0 and opt.display then
           local real_ctx = data:getBatch()
-          local real_center = real_ctx[{{},{},{1 + opt.fineSize/4, opt.fineSize/2 + opt.fineSize/4},{1 + opt.fineSize/4, opt.fineSize/2 + opt.fineSize/4}}]:clone() -- copy by value
+          local real_center = real_ctx:clone() -- copy by value
           real_ctx[{{},{1},{1 + opt.fineSize/4 + opt.overlapPred, opt.fineSize/2 + opt.fineSize/4 - opt.overlapPred},{1 + opt.fineSize/4 + opt.overlapPred, opt.fineSize/2 + opt.fineSize/4 - opt.overlapPred}}] = 2*117.0/255.0 - 1.0
           real_ctx[{{},{2},{1 + opt.fineSize/4 + opt.overlapPred, opt.fineSize/2 + opt.fineSize/4 - opt.overlapPred},{1 + opt.fineSize/4 + opt.overlapPred, opt.fineSize/2 + opt.fineSize/4 - opt.overlapPred}}] = 2*104.0/255.0 - 1.0
           real_ctx[{{},{3},{1 + opt.fineSize/4 + opt.overlapPred, opt.fineSize/2 + opt.fineSize/4 - opt.overlapPred},{1 + opt.fineSize/4 + opt.overlapPred, opt.fineSize/2 + opt.fineSize/4 - opt.overlapPred}}] = 2*123.0/255.0 - 1.0
@@ -428,7 +433,7 @@ for epoch = 1, opt.niter do
           else
             fake = netG:forward(input_ctx_vis)
           end
-          real_ctx[{{},{},{1 + opt.fineSize/4 + opt.overlapPred, opt.fineSize/2 + opt.fineSize/4 - opt.overlapPred},{1 + opt.fineSize/4 + opt.overlapPred, opt.fineSize/2 + opt.fineSize/4 - opt.overlapPred}}]:copy(fake[{{},{},{1 + opt.overlapPred, opt.fineSize/2 - opt.overlapPred},{1 + opt.overlapPred, opt.fineSize/2 - opt.overlapPred}}])
+         -- real_ctx:copy(fake)
           disp.image(fake, {win=opt.display_id, title=opt.name})
           disp.image(real_center, {win=opt.display_id * 3, title=opt.name})
           disp.image(real_ctx, {win=opt.display_id * 6, title=opt.name})
@@ -448,8 +453,8 @@ for epoch = 1, opt.niter do
    parametersD, gradParametersD = nil, nil -- nil them to avoid spiking memory
    parametersG, gradParametersG = nil, nil
    if epoch % 20 == 0 then
-      util.save('checkpoints/' .. opt.name .. '_' .. epoch .. '_net_G.t7', netG, opt.gpu)
-      util.save('checkpoints/' .. opt.name .. '_' .. epoch .. '_net_D.t7', netD, opt.gpu)
+      util.save('checkpoints_recover/' .. opt.name .. '_' .. epoch .. '_net_G.t7', netG, opt.gpu)
+      util.save('checkpoints_recover/' .. opt.name .. '_' .. epoch .. '_net_D.t7', netD, opt.gpu)
    end
    parametersD, gradParametersD = netD:getParameters() -- reflatten the params and get them
    parametersG, gradParametersG = netG:getParameters()

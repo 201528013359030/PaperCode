@@ -79,7 +79,6 @@ pred_center:add(1):mul(0.5)
 real_center:add(1):mul(0.5)
 
 -- save outputs
- image.save(opt.name .. '_removeCenter.png', image.toDisplayTensor(input_image_ctx))
  image.save(opt.name .. '_predWithContext.png', image.toDisplayTensor(image_ctx))
  image.save(opt.name .. '_realCenter.png', image.toDisplayTensor(real_center))
  image.save(opt.name .. '_predCenter.png', image.toDisplayTensor(pred_center))
